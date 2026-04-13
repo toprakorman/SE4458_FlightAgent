@@ -1,7 +1,7 @@
 # SE4458 — Assignment 2: Flight AI Agent Chat Application
 
 ## Source Code
-- Frontend (this repo): https://github.com/toprakorman/SE4458_Assignment2
+- Frontend (this repo): https://github.com/toprakorman/SE4458_FlightAgent
 - Backend (Midterm API): https://github.com/toprakorman/SE4458_Midterm
 
 ## Demo Video
@@ -34,10 +34,10 @@ React Frontend (Chat UI)
 
 **Flow per message:**
 1. User types a natural language message
-2. React sends the full conversation history to Claude API with a structured system prompt
+2. React sends the full conversation history to the Claude API with a structured system prompt
 3. Claude responds with a JSON object containing `action` and `params`
 4. React calls the appropriate EC2 backend endpoint with extracted params
-5. Result is rendered as a rich card (flight list / ticket / boarding pass)
+5. Result is rendered as a rich card (flight list/ticket / boarding pass)
 
 ---
 
