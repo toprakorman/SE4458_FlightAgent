@@ -38,7 +38,8 @@ export async function checkIn(baseUrl, params) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      ticket_number:  params.ticket_number,
+      flight_number:  params.flight_number,
+      date:           params.date,
       passenger_name: params.passenger_name,
     }),
   });
@@ -56,7 +57,7 @@ You have access to these actions:
 - book_flight: Book a ticket.
   Required params: flight_number, date (YYYY-MM-DD), passenger_names (array of strings), trip_type ("one_way" or "round_trip")
 - checkin: Check in a passenger.
-  Required params: ticket_number (string or number), passenger_name (string)
+  Required params: flight_number, date (YYYY-MM-DD), passenger_name (string)
 - chat: General conversation, no API call needed.
 
 Common IATA codes:
@@ -81,7 +82,7 @@ export async function askAgent(history) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model:      'claude-sonnet-4-20250514',
+      model:      'claude-sonnet-4-5',
       max_tokens: 1000,
       system:     SYSTEM_PROMPT,
       messages:   history,
