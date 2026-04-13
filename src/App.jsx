@@ -5,7 +5,7 @@ import TypingIndicator  from './components/TypingIndicator';
 import { askAgent, searchFlights, bookFlight, checkIn } from './api';
 
 const DEFAULT_CONFIG = {
-  baseUrl: 'http://63.183.201.192:5000',
+  baseUrl: 'http://63.177.93.110:5000',
   jwt:     '',
 };
 
@@ -107,11 +107,12 @@ export default function App() {
         resultMsg.flights = flights;
       } else if (parsed.action === 'book_flight') {
         console.log('[Booking API result]', result);
-        const hasTicket = result.data?.ticket_number || result.data?.ticketNumber || result.data?.id || result.data?.booking_id;
+        const bookingData = result.data?.data || result.data;
+        const hasTicket = bookingData?.ticket_number || bookingData?.ticketNumber || bookingData?.id || bookingData?.booking_id;
         resultMsg.text    = result.status === 201 || result.status === 200 || hasTicket
           ? 'Your flight has been booked successfully!'
           : 'Booking failed — check your token and flight details.';
-        resultMsg.booking = result.data;
+        resultMsg.booking = bookingData;
       } else if (parsed.action === 'checkin') {
         resultMsg.text   = result.status === 200
           ? 'Check-in complete!'
