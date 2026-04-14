@@ -21,12 +21,14 @@ This project is an AI Agent chat application that provides a natural-language in
 User (Browser)
     │
     ▼
-React Frontend (Chat UI)
+React Frontend (Chat UI) — served by Nginx on EC2 (port 80)
     │
-    ├──► Claude API (claude-sonnet-4)   ← Intent parsing & NLU
-    │         │ returns: action + params
+    ├──► Proxy Server (Node.js on EC2, port 3001, managed by PM2)
+    │         │
+    │         └──► Claude API (claude-sonnet-4-5)   ← Intent parsing & NLU
+    │                   │ returns: action + params
     │
-    └──► EC2 Flask Backend (Midterm API)
+    └──► EC2 Flask Backend (Midterm API, port 5000, managed by Gunicorn)
               ├── GET  /api/v1/flights/search   (Query Flight)
               ├── POST /api/v1/bookings          (Book Flight)
               └── POST /api/v1/checkin           (Check In)
@@ -34,10 +36,11 @@ React Frontend (Chat UI)
 
 **Flow per message:**
 1. User types a natural language message
-2. React sends the full conversation history to the Claude API with a structured system prompt
-3. Claude responds with a JSON object containing `action` and `params`
-4. React calls the appropriate EC2 backend endpoint with extracted params
-5. Result is rendered as a rich card (flight list/ticket / boarding pass)
+2. React sends the full conversation history to the proxy server
+3. Proxy forwards the request to the Claude API (bypasses browser CORS)
+4. Claude responds with a JSON object containing `action` and `params`
+5. React calls the appropriate EC2 Flask endpoint with extracted params
+6. Result is rendered as a rich card (flight list / ticket confirmation / check-in result)
 
 ---
 
@@ -46,10 +49,22 @@ React Frontend (Chat UI)
 | Layer | Technology |
 |---|---|
 | Frontend | React 18 |
-| AI Agent / LLM | Claude claude-sonnet-4 (Anthropic API) |
+| AI Agent / LLM | Claude claude-sonnet-4-5 (Anthropic API) |
+| Proxy Server | Node.js + Express |
 | Backend API | Python Flask (Midterm Project) |
-| Hosting | EC2 (`http://63.183.201.192:5000`) |
+| Process Manager | PM2 |
+| Web Server | Nginx |
+| Hosting | AWS EC2 — `http://63.177.93.110` |
 | Authentication | JWT (Bearer token for booking) |
+
+---
+
+## Live Demo
+
+The app is deployed and accessible at:
+```
+http://63.177.93.110
+```
 
 ---
 
@@ -57,19 +72,20 @@ React Frontend (Chat UI)
 
 - **Query Flight** — Natural language flight search (e.g. "Find flights from Istanbul to Frankfurt on May 1")
 - **Book Flight** — Book a ticket by flight number and passenger info (JWT required)
-- **Check In** — Assign seat to a passenger by ticket number
+- **Check In** — Assign seat to a passenger using flight number, date and passenger name
 - **Conversation memory** — Multi-turn dialogue keeps context across messages
 - **Rich result cards** — Flight lists, ticket confirmations, and check-in cards rendered visually
 - **Configurable** — EC2 URL and JWT token editable in the UI without redeployment
 
 ---
 
-## Setup & Running
+## Setup & Running Locally
 
 ### Prerequisites
 - Node.js 18+
-- npm or yarn
+- npm
 - Running SE4458 Midterm backend (EC2 or local)
+- Anthropic API key
 
 ### Install & Start
 
@@ -91,7 +107,6 @@ node server.js
 
 **Terminal 2 — React app:**
 ```bash
-cd flight-agent   # root of this project
 npm install
 npm start
 # → Opens at http://localhost:3000
@@ -99,9 +114,25 @@ npm start
 
 ### Environment
 
-No `.env` file needed. The EC2 URL and JWT token are configurable directly inside the app's config bar.
+No `.env` file needed. The EC2 URL and JWT token are configurable directly inside the app's config bar. Your Anthropic API key is set as an environment variable in the proxy terminal (never committed to git).
 
-Your Anthropic API key is set as an environment variable in the proxy terminal (never committed to git).
+---
+
+## Deployment (AWS EC2)
+
+The app is fully deployed on a single EC2 instance (Amazon Linux 2023):
+
+- **Nginx** serves the React build on port 80 and proxies `/api/claude` to the Node proxy
+- **PM2** keeps the proxy server running permanently and auto-restarts on reboot
+- **Gunicorn** runs the Flask backend on port 5000
+
+To redeploy after code changes:
+```bash
+cd ~/SE4458_FlightAgent
+git pull origin main
+npm run build
+sudo systemctl restart nginx
+```
 
 ---
 
@@ -122,41 +153,50 @@ Body: { flight_number, date, passenger_names, trip_type }
 ### Check In
 ```
 POST /api/v1/checkin
-Body: { ticket_number, passenger_name }
+Body: { flight_number, date, passenger_name }
 ```
 
 ---
 
 ## Design & Assumptions
 
-- The app uses Claude's API directly from the browser (no separate agent backend server) — this simplifies the architecture for the assignment scope.
-- JWT authentication for booking is provided manually in the config bar. In production, this would be replaced with a login flow.
+- A lightweight Node.js proxy server is used to forward requests to the Claude API, as browsers block direct calls to `api.anthropic.com` due to CORS restrictions.
+- JWT authentication for booking is provided manually in the config bar. In production, this would be replaced with a proper login flow.
 - The LLM parses IATA codes from city names (Istanbul → IST, Frankfurt → FRA, etc.) using its built-in knowledge.
 - Conversation history is kept in React state (in-memory), so it resets on page refresh.
-- The backend is assumed to be the SE4458 Midterm project running on EC2 with no CORS restrictions.
+- Check-in requires `flight_number`, `date`, and `passenger_name` — the passenger must already have a booking on that flight.
 
 ---
 
 ## Issues Encountered
 
-- **CORS**: The EC2 Flask backend needs CORS headers enabled for browser-based fetch calls. Add `flask-cors` if requests are blocked.
+- **CORS**: Browsers block direct calls to the Anthropic API, so a local proxy server is required. On EC2, Nginx proxies the `/api/claude` route to the Node proxy on port 3001.
+- **Check-in API mismatch**: The backend requires `flight_number`, `date`, and `passenger_name` — not `ticket_number`. The frontend was updated accordingly.
+- **Model name**: The Claude API requires the exact model string `claude-sonnet-4-5`. An incorrect model string causes a 404 error.
+- **Nested API response**: The booking API returns `{ status, message, data: { ticket_number } }`. The frontend was updated to unwrap the nested `data` field for the ticket card to render correctly.
 - **JWT expiry**: Tokens expire — re-login via `POST /api/v1/auth/login` and update the token in the config bar.
-- **Rate limiting**: The midterm's Query Flight endpoint is limited to 3 requests/day. Disable or increase limits during testing.
+- **Rate limiting**: The Query Flight endpoint is limited to 3 requests/day. Disable or increase the limit during testing.
 
 ---
 
 ## Project Structure
 
 ```
-src/
-├── App.jsx                  # Main chat UI, state management, send logic
-├── api.js                   # Claude API + all backend API calls
-├── index.js                 # React entry point
-└── components/
-    ├── ConfigBar.jsx        # EC2 URL + JWT config
-    ├── MessageBubble.jsx    # Chat bubble (user/bot)
-    ├── FlightCard.jsx       # Renders flight search results
-    ├── TicketCard.jsx       # Renders booking confirmation
-    ├── CheckinCard.jsx      # Renders check-in result
-    └── TypingIndicator.jsx  # Animated dots while loading
+├── proxy/
+│   ├── server.js            # Node.js proxy — forwards requests to Claude API
+│   └── package.json
+├── public/
+│   └── index.html
+├── src/
+│   ├── App.jsx              # Main chat UI, state management, send logic
+│   ├── api.js               # Claude API + all backend API calls
+│   ├── index.js             # React entry point
+│   └── components/
+│       ├── ConfigBar.jsx    # EC2 URL + JWT config
+│       ├── MessageBubble.jsx # Chat bubble (user/bot)
+│       ├── FlightCard.jsx   # Renders flight search results
+│       ├── TicketCard.jsx   # Renders booking confirmation
+│       ├── CheckinCard.jsx  # Renders check-in result
+│       └── TypingIndicator.jsx # Animated dots while loading
+└── package.json
 ```
