@@ -78,7 +78,7 @@ export async function askAgent(history) {
   // Calls local proxy (proxy/server.js) instead of Anthropic directly.
   // Browsers block direct calls to api.anthropic.com due to CORS.
   // Run: cd proxy && npm install && node server.js
-  const res = await fetch('http://localhost:3001/api/claude', {
+  const res = await fetch('/api/claude', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
