@@ -5,7 +5,7 @@
 - Backend (Midterm API): https://github.com/toprakorman/SE4458_Midterm
 
 ## Demo Video
-> _Add your Google Drive / YouTube link here_
+> https://drive.google.com/file/d/1ebUKxD-Z6Lx22FXB5CV3Ki3t93fm-IDD/view?usp=drive_link
 
 ---
 
